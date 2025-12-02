@@ -52,13 +52,15 @@ def dimensionar_sistema_completo(lat, lon, consumo_diario_kwh, dias_autonomia, t
     energia_req_wh = consumo_diario_kwh * 1000 * dias_autonomia
     
     # Capacidad Banco (Ah) = Energía / (Voltaje * DoD * FactorTemp)
-    capacidad_banco_ah = energia_req_wh / (voltaje_sistema * dod * factor_temp)
-    num_baterias = math.ceil(capacidad_banco_ah / cap_modulo)
-    capacidad_real_instalada = num_baterias * cap_modulo
+    capacidad_requerida_banco_ah = energia_req_wh / (voltaje_sistema * dod * factor_temp)
+    num_baterias = math.ceil(capacidad_requerida_banco_ah / (cap_modulo * dod))
+    capacidad_real_instalada = num_baterias * (cap_modulo * dod)
+
 
     # --- B. PANELES SOLARES ---
     # HSP Estimadas (Usando pvlib clearsky integrado simplificado)
     tz = 'America/Caracas'
+    eficienca_sistema = 0.85
     site = Location(lat, lon, tz=tz)
     times = pd.date_range(start='2024-06-21 00:00', end='2024-06-21 23:59', freq='1h', tz=tz)
     clearsky = site.get_clearsky(times)
@@ -68,7 +70,7 @@ def dimensionar_sistema_completo(lat, lon, consumo_diario_kwh, dias_autonomia, t
     energia_generacion_objetivo = consumo_diario_kwh * 1000 * 1.3
     
     # Generación de 1 panel
-    gen_un_panel = potencia_panel_w * hsp * 0.85 # 0.85 eficiencia sistema
+    gen_un_panel = potencia_panel_w * hsp * eficienca_sistema 
     
     num_paneles = math.ceil(energia_generacion_objetivo / gen_un_panel)
     potencia_pico_kw = (num_paneles * potencia_panel_w) / 1000
@@ -81,18 +83,21 @@ def dimensionar_sistema_completo(lat, lon, consumo_diario_kwh, dias_autonomia, t
         "bat": {
             "num": num_paneles, # Fix temporal variable name reuse
             "cantidad": num_baterias,
-            "cap_total": capacidad_real_instalada,
+            "cap_total": round(capacidad_real_instalada,2),
+            "cap_req": round(capacidad_requerida_banco_ah,2),
             "tipo": nombre_bat,
             "estado": estado_termico,
             "factor_t": factor_temp,
-            "cap_modulo": cap_modulo
+            "cap_modulo": cap_modulo, 
+            "dod": dod
         },
         "solar": {
             "cantidad": num_paneles,
             "potencia_unit": potencia_panel_w,
             "potencia_total": potencia_pico_kw,
             "hsp": hsp,
-            "curva": curva_potencia
+            "curva": curva_potencia,
+            "eficiencia_sistema": eficienca_sistema
         }
     }
 
@@ -108,7 +113,7 @@ lat = st.sidebar.number_input("Latitud", min_value=-90.0, max_value=90.0, value=
 lon = st.sidebar.number_input("Longitud", min_value=-180.0, max_value=180.0, value=-66.67)
 temp = st.sidebar.slider("Temperatura (°C)", 15, 45, 30)
 st.sidebar.markdown("---")
-consumo = st.sidebar.number_input("Consumo Diario (kWh)", 5.0)
+consumo = st.sidebar.number_input("Consumo Diario (kWh)", min_value=0.5, max_value=250.0, value=5.0, step=0.5)
 dias_aut = st.sidebar.slider("Días Autonomía", 0.5, 5.0, 1.5)
 tipo_bat = st.sidebar.selectbox("Batería", ["Litio (LiFePO4)", "Plomo-Ácido"])
 panel_w = st.sidebar.selectbox("Potencia Panel (W)", [250, 350, 450, 550, 600])
@@ -129,28 +134,30 @@ tab1, tab2, tab3, tab4 = st.tabs(["📊 Dashboard de Diseño", "🗺️ Mapa de 
 with tab1:
     # FILA 1: KPIs SOLARES
     st.subheader("☀️ Dimensionamiento Fotovoltaico")
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Paneles Necesarios", f"{res['solar']['cantidad']} uds", f"{panel_w} Wp c/u")
     c2.metric("Potencia Array", f"{res['solar']['potencia_total']:.2f} kWp", "Total Instalado")
     c3.metric("Horas Sol Pico", f"{res['solar']['hsp']:.1f} HSP", "Calculado c/ pvlib")
-    c4.metric("Generación Est.", f"{(res['solar']['curva'].sum()):.1f} kWh/día", "vs 1.3x Consumo")
+    c4.metric("Eficiencia del Sistema", f"{res['solar']['eficiencia_sistema']*100:.1f} %", "Estimado")
+    c5.metric("Generación Est.", f"{(res['solar']['curva'].sum()):.1f} kWh/día", "vs 1.3x Consumo")
 
     st.divider()
 
     # FILA 2: KPIs BATERÍAS
     st.subheader("🔋 Banco de Baterías (Resiliencia)")
-    b1, b2, b3, b4 = st.columns(4)
+    b1, b2, b3, b4, b5 = st.columns(5)
     b1.metric("Baterías (Módulos)", f"{res['bat']['cantidad']} uds", res['bat']['tipo'] + ' ' + str(res['bat']['cap_modulo']) + 'Ah')
-    b2.metric("Capacidad Total", f"{res['bat']['cap_total']} Ah", "@ 48V")
-    b3.metric("Factor Térmico", f"{res['bat']['factor_t']:.2f}", res['bat']['estado'], delta_color="off")
-    b4.metric("Energía Reserva", f"{(res['bat']['cap_total']*48/1000):.1f} kWh", f"Para {dias_aut} días")
+    b2.metric("Capacidad Real Instalada", f"{res['bat']['cap_total']} Ah", str(res['bat']['dod']*100) + "% DoD")
+    b3.metric("Capacidad Requerida", f"{res['bat']['cap_req']} Ah", "@ 48V")
+    b4.metric("Factor Térmico", f"{res['bat']['factor_t']:.2f}", res['bat']['estado'], delta_color="off")
+    b5.metric("Energía Reserva", f"{(res['bat']['cap_total']*48/1000):.2f} kWh", f"Para {dias_aut} días")
 
     # GRÁFICA
     st.subheader("📈 Balance Energético")
     fig, ax = plt.subplots(figsize=(10, 4))
     
     # Área Solar
-    ax.fill_between(res['solar']['curva'].index, res['solar']['curva'], color='#FFC107', alpha=0.5, label='Producción PV')
+    ax.fill_between(res['solar']['curva'].index, res['solar']['curva'], color='#FFC107', alpha=0.5, label='Generación Solar')
     ax.plot(res['solar']['curva'].index, res['solar']['curva'], color='#FF9800', linewidth=2)
     
     # Línea de Consumo
