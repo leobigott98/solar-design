@@ -7,8 +7,8 @@ import math
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(
-    page_title="SolarResilience Ven",
-    page_icon="🔋",
+    page_title="Saman Energy: Diseño para Microgrids",
+    page_icon="🌳",
     layout="wide"
 )
 
@@ -58,7 +58,7 @@ def calcular_baterias(consumo_kwh, dias_autonomia, temp_amb, tipo_bat):
 # --- 2. INTERFAZ GRÁFICA (FRONTEND) ---
 
 # Título y Descripción
-st.title("🔋 SolarResilience: Diseño para Microgrids")
+st.title("🌳 Saman Energy: Diseño para Microgrids")
 st.markdown("""
 Esta herramienta dimensiona sistemas fotovoltaicos enfocados en la **resiliencia** para zonas con inestabilidad eléctrica (Venezuela/Latam).
 """)
