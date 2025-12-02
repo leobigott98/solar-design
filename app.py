@@ -84,7 +84,8 @@ def dimensionar_sistema_completo(lat, lon, consumo_diario_kwh, dias_autonomia, t
             "cap_total": capacidad_real_instalada,
             "tipo": nombre_bat,
             "estado": estado_termico,
-            "factor_t": factor_temp
+            "factor_t": factor_temp,
+            "cap_modulo": cap_modulo
         },
         "solar": {
             "cantidad": num_paneles,
@@ -103,14 +104,14 @@ def dimensionar_sistema_completo(lat, lon, consumo_diario_kwh, dias_autonomia, t
 st.sidebar.title("Configuración")
 
 # Inputs en Sidebar
-lat = st.sidebar.number_input("Latitud", 11.95)
-lon = st.sidebar.number_input("Longitud", -66.67)
+lat = st.sidebar.number_input("Latitud", min_value=-90.0, max_value=90.0, value=11.95)
+lon = st.sidebar.number_input("Longitud", min_value=-180.0, max_value=180.0, value=-66.67)
 temp = st.sidebar.slider("Temperatura (°C)", 15, 45, 30)
 st.sidebar.markdown("---")
 consumo = st.sidebar.number_input("Consumo Diario (kWh)", 5.0)
 dias_aut = st.sidebar.slider("Días Autonomía", 0.5, 5.0, 1.5)
 tipo_bat = st.sidebar.selectbox("Batería", ["Litio (LiFePO4)", "Plomo-Ácido"])
-panel_w = st.sidebar.selectbox("Potencia Panel (W)", [450, 550, 600])
+panel_w = st.sidebar.selectbox("Potencia Panel (W)", [250, 350, 450, 550, 600])
 
 # Título Principal
 st.title("🌳 Saman Energy: Diseño para Microgrids")
@@ -139,7 +140,7 @@ with tab1:
     # FILA 2: KPIs BATERÍAS
     st.subheader("🔋 Banco de Baterías (Resiliencia)")
     b1, b2, b3, b4 = st.columns(4)
-    b1.metric("Baterías (Módulos)", f"{res['bat']['cantidad']} uds", res['bat']['tipo'])
+    b1.metric("Baterías (Módulos)", f"{res['bat']['cantidad']} uds", res['bat']['tipo'] + ' ' + str(res['bat']['cap_modulo']) + 'Ah')
     b2.metric("Capacidad Total", f"{res['bat']['cap_total']} Ah", "@ 48V")
     b3.metric("Factor Térmico", f"{res['bat']['factor_t']:.2f}", res['bat']['estado'], delta_color="off")
     b4.metric("Energía Reserva", f"{(res['bat']['cap_total']*48/1000):.1f} kWh", f"Para {dias_aut} días")
@@ -156,6 +157,7 @@ with tab1:
     consumo_prom = consumo / 24
     ax.axhline(consumo_prom, color='#2196F3', linestyle='--', linewidth=2, label='Consumo Promedio')
     
+    ax.set_title("Perfil de Generación Diaria (Día Claro)")
     ax.set_ylabel("Potencia (kW)")
     ax.legend()
     ax.grid(True, alpha=0.2)
